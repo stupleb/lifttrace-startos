@@ -93,3 +93,43 @@ import db from './db.js'
 db.prepare("DELETE FROM app_config WHERE key IN ('smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_env_locked')").run()
 db.close()
 `
+
+// LiftTrace's own setting values (src/stores/settings.js); an account shows these until it has chosen.
+export const liftTraceRegional = {
+  units: 'imperial',
+  dateFormat: 'US',
+  timeFormat: '12h',
+} as const
+
+export const regionalSettings = (r: {
+  units: 'metric' | 'imperial'
+  dateFormat: 'US' | 'EU' | 'ISO'
+  timeFormat: '12h' | '24h'
+}) => ({
+  weightUnit: r.units === 'metric' ? 'kg' : 'lbs',
+  heightUnit: r.units === 'metric' ? 'cm' : 'ft',
+  dateFormat: r.dateFormat,
+  timeFormat: r.timeFormat,
+})
+
+// An edit made in the web app stamps field_times, so only rows the package wrote, still on the PREVIOUS default, are moved.
+export const applyRegionalScript = `
+import db from './db.js'
+const settings = JSON.parse(process.env.SETTINGS)
+const previous = JSON.parse(process.env.PREVIOUS || '{}')
+const fill = db.prepare('INSERT OR IGNORE INTO user_settings (user_id, key, value) VALUES (?, ?, ?)')
+const move = db.prepare('UPDATE user_settings SET value = ? WHERE user_id = ? AND key = ? AND value = ? AND field_times IS NULL')
+let written = 0
+db.transaction(() => {
+  for (const { id } of db.prepare('SELECT id FROM users').all()) {
+    for (const [key, value] of Object.entries(settings)) {
+      written += fill.run(id, key, JSON.stringify(value)).changes
+      if (key in previous && previous[key] !== value) {
+        written += move.run(JSON.stringify(value), id, key, JSON.stringify(previous[key])).changes
+      }
+    }
+  }
+})()
+db.close()
+console.log(\`Regional defaults: \${written} settings filled in\`)
+`

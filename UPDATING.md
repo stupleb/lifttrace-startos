@@ -37,3 +37,4 @@ gh release list -R TraceApps/lifttrace --exclude-pre-releases --limit 1
    - `setAdminScript`: `server/db.js` (default export), `bcryptjs`, `claimAnonymousData` in `server/lib/claim-anonymous-data.js`, and the `users` columns `username`, `password_hash` and `role`.
    - `listLibrariesScript` and `setLibrariesScript`: `listSourceStatus`, `importSource` and `clearSource` in `server/exercise-sources/index.js`, and its source ids, which must match `exerciseSources`.
    - `clearSmtpScript`: the `app_config` keys `server/email.js` seeds from the `SMTP_*` variables, and `smtp_env_locked`.
+   - `applyRegionalScript`: the `user_settings` columns `user_id`, `key`, `value` and `field_times`, and the values LiftTrace stores for `weightUnit`, `heightUnit`, `dateFormat` and `timeFormat` (`src/stores/settings.js` and `src/components/settings/SettingsUnits.svelte`), which `regionalSettings` and `liftTraceRegional` must match.

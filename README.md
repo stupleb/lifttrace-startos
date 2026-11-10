@@ -42,10 +42,11 @@ The package runs upstream's own image, unmodified, through its own entrypoint.
 
 Subcontainers:
 
-- `lifttrace` — the LiftTrace server (web app, API and scheduler). Attach with `start-cli package attach lifttrace -n lifttrace`.
+- `lifttrace` — the LiftTrace server (web app, API and scheduler). Attach with `start-cli package attach lifttrace -n lifttrace`. While **Set Regional Defaults** is on, its `regional-defaults` oneshot runs here first at each start.
 - `set-admin-password` — a short-lived container the **Set Admin Password** action starts from the same image; it exists only while the action runs.
 - `exercise-libraries` — the same, for **Choose Exercise Libraries**, started both to fill in its form and to apply it.
 - `manage-smtp` — the same, for **Configure SMTP** when it switches to **Disabled**.
+- `set-regional-defaults` — the same, for **Set Regional Defaults**.
 
 ## Volume and Data Layout
 
@@ -75,10 +76,11 @@ The package writes no LiftTrace configuration file: upstream configures itself f
 | `smtp`              | `disabled`                                                      | **Configure SMTP**               |
 | `apiAccess`         | `off` (`off`, `read`, `write`, `full`)                          | **Configure API Access**         |
 | `exerciseLibraries` | `["free-db"]` (any of `free-db`, `wger`, `exercisedb-oss`)      | **Choose Exercise Libraries**    |
+| `regionalDefaults`  | `null` until **Set Regional Defaults** is saved; then `fill`, `units`, `dateFormat`, `timeFormat` | **Set Regional Defaults** |
 
 `adminPassword` is the last password the action set. If the password is changed inside LiftTrace, the stored copy is stale; the action is the way to get a known one back.
 
-A hand edit survives. An edit to a key that feeds an environment variable restarts LiftTrace with the new value, except `exerciseLibraries`, which is read at each start without causing one; an edit to `adminPassword` changes only what the task checks, not the account. A value that fails validation is replaced by its default at the next write. Changing `jwtSecret` signs everyone out, and changing `tokenEncKey` makes stored OIDC client secrets and webhook signing secrets unreadable.
+A hand edit survives. An edit to a key that feeds an environment variable restarts LiftTrace with the new value, except `exerciseLibraries`, which is read at each start without causing one. `regionalDefaults` is also read at each start, by the `regional-defaults` oneshot, without causing one; an edit to `adminPassword` changes only what the task checks, not the account. A value that fails validation is replaced by its default at the next write. Changing `jwtSecret` signs everyone out, and changing `tokenEncKey` makes stored OIDC client secrets and webhook signing secrets unreadable.
 
 Environment variables the package sets on every start. LiftTrace reads all of them at each launch:
 
@@ -129,11 +131,11 @@ Upstream opens to a setup wizard in which whoever loads the page first creates t
 3. The action creates the `admin` account (role admin) directly in the database, so the first page anyone loads is a sign-in page. Open registration (`POST /api/auth/register`) is refused from then on.
 4. The first start imports the Free Exercise DB in a few seconds. Without internet access the import logs `fetch failed`, LiftTrace starts with an empty catalog, and the next start tries again.
 
-The wizard's other steps (units, body profile) are skipped with it; each has its own Settings section.
+The wizard's other steps (units, body profile) are skipped with it. Each account therefore starts on LiftTrace's own defaults (lbs, ft, MM/DD/YYYY, 12-hour) until it chooses otherwise in **Settings > Language & Region** (height on the **Profile** page), or **Set Regional Defaults** fills in others. The language follows each browser or phone until someone picks one.
 
 ## Actions
 
-Five actions, all user-facing; none is hidden.
+Six actions, all user-facing; none is hidden.
 
 ### Set Admin Password
 
@@ -153,6 +155,17 @@ A multi-select of the three keyless catalogs: Free Exercise DB (`free-db`), wger
 - **Failure**: a catalog that cannot be downloaded fails the action with its error (for example `wger: nothing downloaded`), after every other change has been applied. Running it again retries.
 - **Cost**: without restarting LiftTrace, and the catalogs appear for every account immediately. The Free Exercise DB and wger take a few seconds each; ExerciseDB, fetched page by page from its community server, took about a minute and a half on the test server.
 - **Repeat safety**: a catalog already present is not downloaded again; running it with no change does nothing.
+
+### Set Regional Defaults
+
+Sets the units, date format and time format that accounts start with, in place of LiftTrace's own (lbs, ft, MM/DD/YYYY, 12-hour). Language is not offered: LiftTrace follows each browser or phone until someone picks one.
+
+- **What it changes**: the `weightUnit` (`kg` or `lbs`), `heightUnit` (`cm` or `ft`), `dateFormat` (`EU`, `US` or `ISO`) and `timeFormat` (`24h` or `12h`) rows of `user_settings` for every account, in a temporary container against the live database; it then stores the choice as `regionalDefaults`. A row is filled in where an account has none. A row still on the previous default moves to the new one unless someone changed it in the web app, which stamps it (`field_times`); a change made in the Android app leaves no stamp, so one that matches the previous default moves too. Cardio distances follow the weight unit: km with kg, mi with lbs.
+- **When it takes effect**: at once for what the server writes (weekly summaries, imported workouts and a coach's view use the account's weight unit), and in the web and Android apps when they next load the account's settings. At each start the `regional-defaults` oneshot fills in accounts created since; if it fails, the log shows the error and "Regional defaults were not filled in", and LiftTrace starts anyway.
+- **Turning it off**: with **Apply to accounts without their own settings** off it keeps the last choice and stores `fill: false`. Nothing is filled in from then on, and settings already filled in stay. Turned back on, it moves accounts still on that last choice to the new one.
+- **Cost**: a few seconds, without restarting LiftTrace.
+- **Repeat safety**: running it again with the same choice changes nothing.
+- **Outputs**: how many settings it filled in or moved.
 
 ### Set Primary URL
 
@@ -224,8 +237,10 @@ What works differently from a LiftTrace installed with upstream's Docker Compose
 3. While **Configure SMTP** sets email, **Settings > Email (SMTP)** is read-only.
 4. The exercise catalog starts with the Free Exercise DB instead of the wizard's picker, and the `exercisedb-oss` catalog always comes from `oss.exercisedb.dev` (`EXERCISEDB_OSS_URL` is not offered).
 5. Trace AI cannot be pointed at a model through the server (`AI_PROVIDER`, `AI_BASE_URL`). Each user configures it in **Settings > AI Assistant**, where the browser calls the provider.
-6. Addresses LiftTrace dials itself must not use `.local` names; see [Network Access and Interfaces](#network-access-and-interfaces).
-7. The Wear OS app should only connect through a public domain; see [Network Access and Interfaces](#network-access-and-interfaces).
+6. With **Set Regional Defaults** on, an account created while LiftTrace is running starts on LiftTrace's own units and formats until LiftTrace next starts or the action runs again.
+7. Reminders, streak alerts and weekly summaries that the server sends (through ntfy, Gotify, Apprise or email) go out at the chosen time in UTC: LiftTrace never saves an account's time zone, and the server falls back to UTC. The Android app's own reminders use the phone's time.
+8. Addresses LiftTrace dials itself must not use `.local` names; see [Network Access and Interfaces](#network-access-and-interfaces).
+9. The Wear OS app should only connect through a public domain; see [Network Access and Interfaces](#network-access-and-interfaces).
 
 ---
 
@@ -237,7 +252,7 @@ The package's operable surface in one block.
 package_id: lifttrace
 image: ghcr.io/traceapps/lifttrace
 architectures: [x86_64, aarch64]
-subcontainers: [lifttrace, set-admin-password, exercise-libraries, manage-smtp]
+subcontainers: [lifttrace, set-admin-password, exercise-libraries, manage-smtp, set-regional-defaults]
 volumes:
   main: [/data/db, /data/uploads, /data/backups]
   startos: none
@@ -273,6 +288,7 @@ interfaces:
 actions:
   - set-admin-password
   - set-exercise-libraries
+  - set-regional-defaults
   - set-primary-url
   - manage-smtp
   - set-api-access

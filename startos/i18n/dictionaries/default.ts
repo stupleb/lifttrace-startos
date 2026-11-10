@@ -53,6 +53,24 @@ const dict = {
   'Choose Exercise Libraries': 33,
   'Choose which public exercise catalogs fill the exercise library every LiftTrace account picks from. Exercises people create themselves are never touched.': 34,
   'A removed library disappears from exercise lists and pickers. Workouts already logged keep their exercises, and adding the library back restores the same entries.': 35,
+
+  // actions/setRegionalDefaults.ts
+  'Apply to accounts without their own settings': 37,
+  "When on, LiftTrace fills these in now for every account that hasn't set them itself, and for new accounts each time it starts. Turn off to stop; settings already filled in stay as they are.": 38,
+  Units: 39,
+  'For body weight, height and cardio distance.': 40,
+  'Metric (kg, cm, km)': 41,
+  'Imperial (lb, ft/in, mi)': 42,
+  'Date format': 43,
+  'Time format': 44,
+  '24-hour': 45,
+  '12-hour': 46,
+  'Set Regional Defaults': 47,
+  'Choose the units and the date and time formats that LiftTrace accounts start with. It fills them in for every account that has not chosen them, now and each time LiftTrace starts, and never changes a choice someone has made.': 48,
+  'Regional Defaults Turned Off': 49,
+  'LiftTrace no longer fills in regional defaults. Settings already filled in stay as they are.': 50,
+  'Regional Defaults Saved': 51,
+  'LiftTrace filled in ${count} settings for accounts that had not chosen them. Accounts created later get them the next time LiftTrace starts.': 52,
 } as const
 
 /**

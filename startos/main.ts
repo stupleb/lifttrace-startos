@@ -3,7 +3,14 @@ import { primaryUrl } from './actions/setPrimaryUrl'
 import { storeJson } from './fileModels/store.json'
 import { i18n } from './i18n'
 import { sdk } from './sdk'
-import { dbMount, dbPath, rootCaPath, uiPort } from './utils'
+import {
+  applyRegionalScript,
+  dbMount,
+  dbPath,
+  regionalSettings,
+  rootCaPath,
+  uiPort,
+} from './utils'
 
 export const main = sdk.setupMain(async ({ effects }) => {
   console.info(i18n('Starting LiftTrace!'))
@@ -40,10 +47,11 @@ export const main = sdk.setupMain(async ({ effects }) => {
 
   const publicUrl = await primaryUrl.bestUsable(effects).const()
   const apiLevel = ['off', 'read', 'write', 'full'].indexOf(store.apiAccess)
-  // Read once: Choose Exercise Libraries applies itself to the running server.
+  // Read once: Choose Exercise Libraries and Set Regional Defaults apply themselves to the running server.
   const exerciseLibraries = await storeJson
     .read((s) => s.exerciseLibraries)
     .once()
+  const regional = await storeJson.read((s) => s.regionalDefaults).once()
 
   const sub = sdk.SubContainer.of(
     effects,
@@ -67,48 +75,72 @@ export const main = sdk.setupMain(async ({ effects }) => {
   // Lets LiftTrace reach the HTTPS addresses StartOS gives other services, such as NutriTrace, ntfy or Pocket ID.
   await sub.writeFile(rootCaPath, await sdk.getRootCa(effects))
 
-  return sdk.Daemons.of(effects).addDaemon('primary', {
-    subcontainer: sub,
-    exec: {
-      command: sdk.useEntrypoint(),
-      env: {
-        PORT: String(uiPort),
-        DB_PATH: dbPath,
-        UPLOADS_PATH: '/data/uploads',
-        BACKUPS_PATH: '/data/backups',
-        JWT_SECRET: store.jwtSecret,
-        TOKEN_ENC_KEY: store.tokenEncKey,
-        UPDATE_CHECK: 'off',
-        NODE_EXTRA_CA_CERTS: rootCaPath,
-        ...(publicUrl ? { PUBLIC_URL: publicUrl } : {}),
-        ...(smtp
-          ? {
-              SMTP_HOST: smtp.host,
-              SMTP_PORT: String(smtp.port),
-              SMTP_SECURE: String(smtp.security === 'tls'),
-              SMTP_USER: smtp.username ?? '',
-              SMTP_PASS: smtp.password ?? '',
-              SMTP_FROM: smtp.from,
-            }
-          : {}),
-        WEBHOOKS_ENABLED: 'true',
-        ALLOW_PRIVATE_WEBHOOK_URLS: 'true',
-        MCP_ENABLED: String(apiLevel > 0),
-        PUBLIC_API_ENABLED: String(apiLevel > 0),
-        MCP_WRITE_ENABLED: String(apiLevel > 1),
-        PUBLIC_API_WRITE_ENABLED: String(apiLevel > 1),
-        MCP_DESTROY_ENABLED: String(apiLevel > 2),
-        EXERCISE_SOURCES: (exerciseLibraries ?? []).join(','),
+  return sdk.Daemons.of(effects)
+    .addOneshot('regional-defaults', () =>
+      regional?.fill
+        ? {
+            subcontainer: sub,
+            exec: {
+              // A failed fill is logged and LiftTrace starts anyway.
+              command: [
+                'sh',
+                '-c',
+                'node --input-type=module -e "$SCRIPT" || echo "Regional defaults were not filled in"',
+              ],
+              cwd: '/app',
+              env: {
+                DB_PATH: dbPath,
+                LOG_LEVEL: 'warn',
+                SCRIPT: applyRegionalScript,
+                SETTINGS: JSON.stringify(regionalSettings(regional)),
+              },
+            },
+            requires: [],
+          }
+        : null,
+    )
+    .addDaemon('primary', {
+      subcontainer: sub,
+      exec: {
+        command: sdk.useEntrypoint(),
+        env: {
+          PORT: String(uiPort),
+          DB_PATH: dbPath,
+          UPLOADS_PATH: '/data/uploads',
+          BACKUPS_PATH: '/data/backups',
+          JWT_SECRET: store.jwtSecret,
+          TOKEN_ENC_KEY: store.tokenEncKey,
+          UPDATE_CHECK: 'off',
+          NODE_EXTRA_CA_CERTS: rootCaPath,
+          ...(publicUrl ? { PUBLIC_URL: publicUrl } : {}),
+          ...(smtp
+            ? {
+                SMTP_HOST: smtp.host,
+                SMTP_PORT: String(smtp.port),
+                SMTP_SECURE: String(smtp.security === 'tls'),
+                SMTP_USER: smtp.username ?? '',
+                SMTP_PASS: smtp.password ?? '',
+                SMTP_FROM: smtp.from,
+              }
+            : {}),
+          WEBHOOKS_ENABLED: 'true',
+          ALLOW_PRIVATE_WEBHOOK_URLS: 'true',
+          MCP_ENABLED: String(apiLevel > 0),
+          PUBLIC_API_ENABLED: String(apiLevel > 0),
+          MCP_WRITE_ENABLED: String(apiLevel > 1),
+          PUBLIC_API_WRITE_ENABLED: String(apiLevel > 1),
+          MCP_DESTROY_ENABLED: String(apiLevel > 2),
+          EXERCISE_SOURCES: (exerciseLibraries ?? []).join(','),
+        },
       },
-    },
-    ready: {
-      display: i18n('Web Interface'),
-      fn: () =>
-        sdk.healthCheck.checkWebUrl(effects, `http://127.0.0.1:${uiPort}/`, {
-          successMessage: i18n('The web interface is ready'),
-          errorMessage: i18n('The web interface is not ready'),
-        }),
-    },
-    requires: [],
-  })
+      ready: {
+        display: i18n('Web Interface'),
+        fn: () =>
+          sdk.healthCheck.checkWebUrl(effects, `http://127.0.0.1:${uiPort}/`, {
+            successMessage: i18n('The web interface is ready'),
+            errorMessage: i18n('The web interface is not ready'),
+          }),
+      },
+      requires: regional?.fill ? ['regional-defaults'] : [],
+    })
 })

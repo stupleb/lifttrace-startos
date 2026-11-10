@@ -13,7 +13,7 @@
 - **Web UI** is the one address LiftTrace has. It serves the web app and the API the Android and Wear OS apps sign in to.
 - Sign-in is on from the start. StartOS creates the `admin` account for you, so nobody can claim your server by opening it first.
 - The exercise catalog comes filled with the Free Exercise DB. **Choose Exercise Libraries** adds or removes wger and ExerciseDB.
-- Email, the address LiftTrace puts in its links, and access for AI assistants are set with StartOS actions.
+- Email, the address LiftTrace puts in its links, access for AI assistants, and the units and date and time formats accounts start with are set with StartOS actions.
 - Your workouts, programs, photos, accounts and settings are all in StartOS backups. LiftTrace's own backup archives, from **Settings > Backup & Restore**, stay on the server but are left out of StartOS backups.
 - LiftTrace doesn't check GitHub for new releases. StartOS updates it.
 
@@ -22,8 +22,9 @@
 1. Run **Set Admin Password** when StartOS asks for it. Copy the username, `admin`, and the password it shows.
 2. Start LiftTrace and open the **Web UI**.
 3. Sign in as `admin`.
-4. Set your units and body profile in **Settings**, so weights and calorie estimates come out right.
-5. To give someone else their own log, open **Settings > Users** and invite them, or add them with a username and password yourself. Without email, LiftTrace gives you the invitation link to send them yourself; run **Configure SMTP** to have it emailed.
+4. Run **Set Regional Defaults** to choose the units and the date and time formats that your accounts start with.
+5. Set your height and weight on your **Profile** page, so calorie estimates come out right.
+6. To give someone else their own log, open **Settings > Users** and invite them, or add them with a username and password yourself. Without email, LiftTrace gives you the invitation link to send them yourself; run **Configure SMTP** to have it emailed.
 
 ## Using LiftTrace
 
@@ -32,6 +33,10 @@
 LiftTrace downloads the Free Exercise DB, about 870 exercises with photos, the first time it starts. Without internet access then, the catalog starts empty and LiftTrace tries again each time it starts.
 
 Run **Choose Exercise Libraries** to tick or untick the catalogs everyone picks exercises from: the Free Exercise DB, wger (about 950 exercises, few pictures) and ExerciseDB (about 1,500 animated exercises, served by a community server; it takes a minute or two to download). Unticking one hides its exercises from lists and pickers; workouts you've already logged keep them, and ticking it again brings the same entries back. Exercises you've created yourself are never touched.
+
+### Regional defaults
+
+**Set Regional Defaults** fills in the units and the date and time formats for every account that hasn't chosen its own. Each person can still change theirs in **Settings > Language & Region**. Accounts you add later get the defaults the next time LiftTrace starts, or straight away if you run the action again. To stop, run it with **Apply to accounts without their own settings** turned off; settings already filled in stay as they are. LiftTrace's language follows each browser or phone until someone picks one there.
 
 ### The admin password
 
@@ -57,7 +62,7 @@ LiftTrace can reach other services on this server at the HTTPS addresses StartOS
 
 - **Music**: in **Settings > Radio**, pick Subsonic for Navidrome (from the Community Registry), or Jellyfin, Plex or Emby, and enter its address and your sign-in.
 - **NutriTrace**: in NutriTrace, create a token in **Settings > API Tokens** with **write:workouts** ticked. In LiftTrace's **Settings > NutriTrace**, paste NutriTrace's **Web UI** address and the token, test it and turn it on. Each finished workout's calories then reach NutriTrace.
-- **Notifications**: in **Settings > Notifications**, choose ntfy, Gotify or Apprise and enter its address.
+- **Notifications**: in **Settings > Notifications**, choose ntfy, Gotify or Apprise and enter its address. Reminders sent this way, and the weekly summary, follow UTC rather than your local time: a 07:00 reminder arrives at 08:00 in Berlin in winter. The Android app's own reminders, set from the same times, use your phone's clock.
 - **Single sign-on**: in **Settings > Authentication**, add Pocket ID or another OpenID Connect provider. For Pocket ID, the issuer is the domain you chose with Pocket ID's **Set Primary URL**. Your `admin` account has no email address, so link it to Pocket ID from your profile in LiftTrace.
 - **Webhooks**: in **Settings > Webhooks**, an admin can send finished workouts, personal records, body stats, progress photos and program weeks to Home Assistant, n8n or any other address, on your network or not.
 

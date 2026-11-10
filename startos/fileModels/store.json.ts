@@ -10,6 +10,15 @@ const shape = z.looseObject({
   smtp: smtpShape,
   apiAccess: z.enum(['off', 'read', 'write', 'full']).catch('off'),
   exerciseLibraries: z.array(z.enum(exerciseSources)).catch(['free-db']),
+  regionalDefaults: z
+    .looseObject({
+      fill: z.boolean().catch(true),
+      units: z.enum(['metric', 'imperial']),
+      dateFormat: z.enum(['US', 'EU', 'ISO']),
+      timeFormat: z.enum(['12h', '24h']),
+    })
+    .nullable()
+    .catch(null),
 })
 
 export const storeJson = FileHelper.json(

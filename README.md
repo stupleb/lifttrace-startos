@@ -42,7 +42,7 @@ The package runs upstream's own image, unmodified, through its own entrypoint.
 
 Subcontainers:
 
-- `lifttrace` — the LiftTrace server (web app, API and scheduler). Attach with `start-cli package attach lifttrace -n lifttrace`. While **Set Regional Defaults** is on, its `regional-defaults` oneshot runs here first at each start.
+- `lifttrace` — the LiftTrace server (web app, API and scheduler). Attach with `start-cli package attach lifttrace -n lifttrace`. While **Set Regional Defaults** is on, its `regional-defaults` oneshot re-creates the trigger here before the server starts.
 - `set-admin-password` — a short-lived container the **Set Admin Password** action starts from the same image; it exists only while the action runs.
 - `exercise-libraries` — the same, for **Choose Exercise Libraries**, started both to fill in its form and to apply it.
 - `manage-smtp` — the same, for **Configure SMTP** when it switches to **Disabled**.
@@ -131,7 +131,7 @@ Upstream opens to a setup wizard in which whoever loads the page first creates t
 3. The action creates the `admin` account (role admin) directly in the database, so the first page anyone loads is a sign-in page. Open registration (`POST /api/auth/register`) is refused from then on.
 4. The first start imports the Free Exercise DB in a few seconds. Without internet access the import logs `fetch failed`, LiftTrace starts with an empty catalog, and the next start tries again.
 
-The wizard's other steps (units, body profile) are skipped with it. Each account therefore starts on LiftTrace's own defaults (lbs, ft, MM/DD/YYYY, 12-hour) until it chooses otherwise in **Settings > Language & Region** (height on the **Profile** page), or **Set Regional Defaults** fills in others. The language follows each browser or phone until someone picks one.
+The wizard's other steps (units, body profile) are skipped with it. Each account therefore starts on LiftTrace's own defaults (lbs, ft, MM/DD/YYYY, 12-hour) until it chooses otherwise in **Settings > Language & Region** (height on the **Profile** page), unless it was created while **Set Regional Defaults** was on. The language follows each browser or phone until someone picks one.
 
 ## Actions
 
@@ -158,14 +158,14 @@ A multi-select of the three keyless catalogs: Free Exercise DB (`free-db`), wger
 
 ### Set Regional Defaults
 
-Sets the units, date format and time format that accounts start with, in place of LiftTrace's own (lbs, ft, MM/DD/YYYY, 12-hour). Language is not offered: LiftTrace follows each browser or phone until someone picks one.
+Sets the units, date format and time format that new accounts start with, in place of LiftTrace's own (lbs, ft, MM/DD/YYYY, 12-hour). Language is not offered: LiftTrace follows each browser or phone until someone picks one. The choice is stored as `regionalDefaults`, with `fill` false while **Use for new accounts** is off.
 
-- **What it changes**: the `weightUnit` (`kg` or `lbs`), `heightUnit` (`cm` or `ft`), `dateFormat` (`EU`, `US` or `ISO`) and `timeFormat` (`24h` or `12h`) rows of `user_settings` for every account, in a temporary container against the live database; it then stores the choice as `regionalDefaults`. A row is filled in where an account has none. A row still on the previous default moves to the new one unless someone changed it in the web app, which stamps it (`field_times`); a change made in the Android app leaves no stamp, so one that matches the previous default moves too. Cardio distances follow the weight unit: km with kg, mi with lbs.
-- **When it takes effect**: at once for what the server writes (weekly summaries, imported workouts and a coach's view use the account's weight unit), and in the web and Android apps when they next load the account's settings. At each start the `regional-defaults` oneshot fills in accounts created since; if it fails, the log shows the error and "Regional defaults were not filled in", and LiftTrace starts anyway.
-- **Turning it off**: with **Apply to accounts without their own settings** off it keeps the last choice and stores `fill: false`. Nothing is filled in from then on, and settings already filled in stay. Turned back on, it moves accounts still on that last choice to the new one.
-- **Cost**: a few seconds, without restarting LiftTrace.
-- **Repeat safety**: running it again with the same choice changes nothing.
-- **Outputs**: how many settings it filled in or moved.
+- **What it changes**: a SQLite trigger, `startos_regional_defaults`, on LiftTrace's `users` table. When an account is created, it writes that account's `user_settings` rows `weightUnit` (`kg` or `lbs`), `heightUnit` (`cm` or `ft`), `dateFormat` (`ISO`, `EU` or `US`) and `timeFormat` (`24h` or `12h`). Existing accounts are never changed, and each person can change their own settings afterwards. Cardio distances follow the weight unit: km with kg, mi with lbs.
+- **When it applies**: to each account created after the action runs, at the moment it is created. The trigger fires only for an account created in the last minute, so restoring a LiftTrace full backup (**Settings > Backup & Restore**), which re-inserts its accounts with their original creation time, keeps their own settings. The `regional-defaults` oneshot removes the trigger before LiftTrace's migrations run and re-creates it after, on every start: a migration can rebuild the `users` table, which drops it, and SQLite refuses some table rebuilds while it exists. If it fails it logs `Regional defaults not applied: …` and LiftTrace starts anyway; the action reports the same failure as an error.
+- **Cost**: a few seconds, without restarting LiftTrace. While defaults are set, each start runs the oneshot first, which takes about a second.
+- **Turning it off** removes the trigger. Accounts created while it was on keep their settings.
+- **Repeat safety**: each run replaces the trigger and the stored choice; accounts created before keep what they started with.
+- **Output**: a confirmation.
 
 ### Set Primary URL
 
@@ -237,7 +237,7 @@ What works differently from a LiftTrace installed with upstream's Docker Compose
 3. While **Configure SMTP** sets email, **Settings > Email (SMTP)** is read-only.
 4. The exercise catalog starts with the Free Exercise DB instead of the wizard's picker, and the `exercisedb-oss` catalog always comes from `oss.exercisedb.dev` (`EXERCISEDB_OSS_URL` is not offered).
 5. Trace AI cannot be pointed at a model through the server (`AI_PROVIDER`, `AI_BASE_URL`). Each user configures it in **Settings > AI Assistant**, where the browser calls the provider.
-6. With **Set Regional Defaults** on, an account created while LiftTrace is running starts on LiftTrace's own units and formats until LiftTrace next starts or the action runs again.
+6. LiftTrace has no instance-wide default for units and date and time formats. **Set Regional Defaults** gives them to accounts created after it runs; accounts that already exist, the `admin` account included, keep their own settings.
 7. Reminders, streak alerts and weekly summaries that the server sends (through ntfy, Gotify, Apprise or email) go out at the chosen time in UTC: LiftTrace never saves an account's time zone, and the server falls back to UTC. The Android app's own reminders use the phone's time.
 8. Addresses LiftTrace dials itself must not use `.local` names; see [Network Access and Interfaces](#network-access-and-interfaces).
 9. The Wear OS app should only connect through a public domain; see [Network Access and Interfaces](#network-access-and-interfaces).

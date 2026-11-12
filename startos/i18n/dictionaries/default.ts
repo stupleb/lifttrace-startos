@@ -55,8 +55,8 @@ const dict = {
   'A removed library disappears from exercise lists and pickers. Workouts already logged keep their exercises, and adding the library back restores the same entries.': 35,
 
   // actions/setRegionalDefaults.ts
-  'Apply to accounts without their own settings': 37,
-  "When on, LiftTrace fills these in now for every account that hasn't set them itself, and for new accounts each time it starts. Turn off to stop; settings already filled in stay as they are.": 38,
+  'Use for new accounts': 37,
+  "When on, every account created from now on starts with these settings. Turn off to give new accounts LiftTrace's own defaults again. Existing accounts are never changed.": 38,
   Units: 39,
   'For body weight, height and cardio distance.': 40,
   'Metric (kg, cm, km)': 41,
@@ -66,11 +66,11 @@ const dict = {
   '24-hour': 45,
   '12-hour': 46,
   'Set Regional Defaults': 47,
-  'Choose the units and the date and time formats that LiftTrace accounts start with. It fills them in for every account that has not chosen them, now and each time LiftTrace starts, and never changes a choice someone has made.': 48,
+  'Choose the units and the date and time formats that new LiftTrace accounts start with. An account gets them the moment it is created; existing accounts keep their settings.': 48,
   'Regional Defaults Turned Off': 49,
-  'LiftTrace no longer fills in regional defaults. Settings already filled in stay as they are.': 50,
+  "New accounts start with LiftTrace's own defaults again. Existing accounts keep their settings.": 50,
   'Regional Defaults Saved': 51,
-  'LiftTrace filled in ${count} settings for accounts that had not chosen them. Accounts created later get them the next time LiftTrace starts.': 52,
+  'New accounts start with these settings from now on. Existing accounts keep theirs.': 52,
 } as const
 
 /**

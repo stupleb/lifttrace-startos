@@ -22,7 +22,7 @@
 1. Run **Set Admin Password** when StartOS asks for it. Copy the username, `admin`, and the password it shows.
 2. Start LiftTrace and open the **Web UI**.
 3. Sign in as `admin`.
-4. Run **Set Regional Defaults** to choose the units and the date and time formats that your accounts start with.
+4. Run **Set Regional Defaults** to choose the units and the date and time formats that new accounts start with. Set your own in **Settings > Language & Region**.
 5. Set your height and weight on your **Profile** page, so calorie estimates come out right.
 6. To give someone else their own log, open **Settings > Users** and invite them, or add them with a username and password yourself. Without email, LiftTrace gives you the invitation link to send them yourself; run **Configure SMTP** to have it emailed.
 
@@ -36,7 +36,7 @@ Run **Choose Exercise Libraries** to tick or untick the catalogs everyone picks 
 
 ### Regional defaults
 
-**Set Regional Defaults** fills in the units and the date and time formats for every account that hasn't chosen its own. Each person can still change theirs in **Settings > Language & Region**. Accounts you add later get the defaults the next time LiftTrace starts, or straight away if you run the action again. To stop, run it with **Apply to accounts without their own settings** turned off; settings already filled in stay as they are. LiftTrace's language follows each browser or phone until someone picks one there.
+**Set Regional Defaults** chooses the units and the date and time formats that accounts start with. Every account created after you run it starts with them; accounts that already exist, yours included, keep their settings. Each person can change theirs in **Settings > Language & Region**. To stop, run it with **Use for new accounts** turned off. LiftTrace's language follows each browser or phone until someone picks one there.
 
 ### The admin password
 

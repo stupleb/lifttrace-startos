@@ -4,10 +4,10 @@ import { storeJson } from './fileModels/store.json'
 import { i18n } from './i18n'
 import { sdk } from './sdk'
 import {
-  applyRegionalScript,
   dbMount,
   dbPath,
   regionalSettings,
+  regionalTriggerScript,
   rootCaPath,
   uiPort,
 } from './utils'
@@ -75,24 +75,26 @@ export const main = sdk.setupMain(async ({ effects }) => {
   // Lets LiftTrace reach the HTTPS addresses StartOS gives other services, such as NutriTrace, ntfy or Pocket ID.
   await sub.writeFile(rootCaPath, await sdk.getRootCa(effects))
 
+  // regional-defaults runs on every start: a LiftTrace migration can rebuild the users table, which drops the trigger.
   return sdk.Daemons.of(effects)
     .addOneshot('regional-defaults', () =>
       regional?.fill
         ? {
             subcontainer: sub,
             exec: {
-              // A failed fill is logged and LiftTrace starts anyway.
               command: [
-                'sh',
-                '-c',
-                'node --input-type=module -e "$SCRIPT" || echo "Regional defaults were not filled in"',
+                'node',
+                '--input-type=module',
+                '-e',
+                regionalTriggerScript,
               ],
               cwd: '/app',
               env: {
                 DB_PATH: dbPath,
                 LOG_LEVEL: 'warn',
-                SCRIPT: applyRegionalScript,
                 SETTINGS: JSON.stringify(regionalSettings(regional)),
+                // A failure is logged, never allowed to stop LiftTrace starting.
+                BEST_EFFORT: '1',
               },
             },
             requires: [],

@@ -112,24 +112,30 @@ export const regionalSettings = (r: {
   timeFormat: r.timeFormat,
 })
 
-// An edit made in the web app stamps field_times, so only rows the package wrote, still on the PREVIOUS default, are moved.
-export const applyRegionalScript = `
-import db from './db.js'
-const settings = JSON.parse(process.env.SETTINGS)
-const previous = JSON.parse(process.env.PREVIOUS || '{}')
-const fill = db.prepare('INSERT OR IGNORE INTO user_settings (user_id, key, value) VALUES (?, ?, ?)')
-const move = db.prepare('UPDATE user_settings SET value = ? WHERE user_id = ? AND key = ? AND value = ? AND field_times IS NULL')
-let written = 0
-db.transaction(() => {
-  for (const { id } of db.prepare('SELECT id FROM users').all()) {
-    for (const [key, value] of Object.entries(settings)) {
-      written += fill.run(id, key, JSON.stringify(value)).changes
-      if (key in previous && previous[key] !== value) {
-        written += move.run(JSON.stringify(value), id, key, JSON.stringify(previous[key])).changes
-      }
-    }
-  }
-})()
+// Restoring a LiftTrace backup re-inserts users with their original created_at, so the trigger leaves restored accounts alone.
+export const regionalTriggerScript = `
+try {
+// Dropped before db.js migrates: SQLite 3.45 refuses to rename a table while a trigger names one that is missing.
+const { default: Database } = await import('better-sqlite3')
+const raw = new Database(process.env.DB_PATH)
+raw.exec('DROP TRIGGER IF EXISTS startos_regional_defaults')
+raw.close()
+const { default: db } = await import('./db.js')
+const sql = (s) => "'" + String(s).replaceAll("'", "''") + "'"
+const has = (table, cols) => cols.every((c) => db.prepare('PRAGMA table_info(' + table + ')').all().some((r) => r.name === c))
+if (process.env.SETTINGS) {
+  if (!has('users', ['id', 'created_at']) || !has('user_settings', ['user_id', 'key', 'value', 'updated_at']))
+    throw new Error('the users or user_settings columns it needs have changed')
+  const inserts = Object.entries(JSON.parse(process.env.SETTINGS)).map(([key, value]) =>
+    \`INSERT OR IGNORE INTO user_settings (user_id, key, value, updated_at) VALUES (NEW.id, \${sql(key)}, \${sql(JSON.stringify(value))}, datetime('now'));\`)
+  db.exec(\`CREATE TRIGGER startos_regional_defaults AFTER INSERT ON users
+    WHEN julianday(NEW.created_at) >= julianday('now', '-1 minute')
+    BEGIN \${inserts.join(' ')} END\`)
+}
 db.close()
-console.log(\`Regional defaults: \${written} settings filled in\`)
+console.log(process.env.SETTINGS ? 'Regional defaults: set for new accounts' : 'Regional defaults: off')
+} catch (e) {
+  if (!process.env.BEST_EFFORT) throw e
+  console.error(\`Regional defaults not applied: \${e.message}\`)
+}
 `

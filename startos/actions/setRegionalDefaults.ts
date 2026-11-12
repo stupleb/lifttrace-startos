@@ -2,17 +2,17 @@ import { storeJson } from '../fileModels/store.json'
 import { i18n } from '../i18n'
 import { sdk } from '../sdk'
 import {
-  applyRegionalScript,
   liftTraceRegional,
   regionalSettings,
+  regionalTriggerScript,
   runInImage,
 } from '../utils'
 
 const inputSpec = sdk.InputSpec.of({
   fill: sdk.Value.toggle({
-    name: i18n('Apply to accounts without their own settings'),
+    name: i18n('Use for new accounts'),
     description: i18n(
-      "When on, LiftTrace fills these in now for every account that hasn't set them itself, and for new accounts each time it starts. Turn off to stop; settings already filled in stay as they are.",
+      "When on, every account created from now on starts with these settings. Turn off to give new accounts LiftTrace's own defaults again. Existing accounts are never changed.",
     ),
     default: true,
   }),
@@ -52,7 +52,7 @@ export const setRegionalDefaults = sdk.Action.withInput(
   async ({ effects }) => ({
     name: i18n('Set Regional Defaults'),
     description: i18n(
-      'Choose the units and the date and time formats that LiftTrace accounts start with. It fills them in for every account that has not chosen them, now and each time LiftTrace starts, and never changes a choice someone has made.',
+      'Choose the units and the date and time formats that new LiftTrace accounts start with. An account gets them the moment it is created; existing accounts keep their settings.',
     ),
     warning: null,
     allowedStatuses: 'any',
@@ -69,46 +69,32 @@ export const setRegionalDefaults = sdk.Action.withInput(
     },
 
   async ({ effects, input: { fill, ...defaults } }) => {
-    const previous = await storeJson.read((s) => s.regionalDefaults).once()
-    // Turned off, the last choice is kept, so turning it back on can still move the accounts it filled in.
-    if (!fill) {
-      await storeJson.merge(effects, {
-        regionalDefaults: { ...(previous ?? liftTraceRegional), fill: false },
-      })
-      return {
-        version: '1',
-        title: i18n('Regional Defaults Turned Off'),
-        message: i18n(
-          'LiftTrace no longer fills in regional defaults. Settings already filled in stay as they are.',
-        ),
-        result: null,
-      }
-    }
-    const { stdout } = await runInImage(
+    await runInImage(
       effects,
       'set-regional-defaults',
-      applyRegionalScript,
-      {
-        SETTINGS: JSON.stringify(regionalSettings(defaults)),
-        PREVIOUS: JSON.stringify(previous ? regionalSettings(previous) : {}),
-      },
+      regionalTriggerScript,
+      fill ? { SETTINGS: JSON.stringify(regionalSettings(defaults)) } : {},
     )
     await storeJson.merge(effects, {
-      regionalDefaults: { ...defaults, fill: true },
+      regionalDefaults: { ...defaults, fill },
     })
 
-    return {
-      version: '1',
-      title: i18n('Regional Defaults Saved'),
-      message: i18n(
-        'LiftTrace filled in ${count} settings for accounts that had not chosen them. Accounts created later get them the next time LiftTrace starts.',
-        {
-          count: Number(
-            String(stdout).match(/(\d+) settings filled in/)?.[1] ?? 0,
+    return fill
+      ? {
+          version: '1',
+          title: i18n('Regional Defaults Saved'),
+          message: i18n(
+            'New accounts start with these settings from now on. Existing accounts keep theirs.',
           ),
-        },
-      ),
-      result: null,
-    }
+          result: null,
+        }
+      : {
+          version: '1',
+          title: i18n('Regional Defaults Turned Off'),
+          message: i18n(
+            "New accounts start with LiftTrace's own defaults again. Existing accounts keep their settings.",
+          ),
+          result: null,
+        }
   },
 )
